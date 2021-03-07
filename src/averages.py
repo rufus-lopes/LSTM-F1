@@ -76,13 +76,23 @@ def checkFullLap(df, isPit):
             data.append(lap)
     if data:
         return pd.concat(data)
+def get_lap_time_remaining(df):
+    g = df.groupby('currentLapNum')
+    data = []
+    groupNames = list(g.groups)
+    for n in groupNames:
+        lap = g.get_group(n)
+        lap['lap_time_remaining'] = lap['finalLapTime'] - lap['currentLapTime']
+        data.append(lap)
+    if data:
+        return pd.concat(data)
 
 def trainingCalculations(db):
 
     columnsToSum = [
     'currentLapTime', 'worldPositionX', 'worldPositionY', 'worldPositionZ',
     'worldVelocityX', 'worldVelocityY', 'worldVelocityZ', 'yaw', 'pitch',
-    'roll', 'speed', 'throttle', 'steer', 'brake', 'clutch', 'gear',
+    'roll', 'speed', 'throttle', 'steer', 'brake', 'gear',
     'engineRPM', 'drs', 'brakesTemperatureRL', 'brakesTemperatureRR',
     'brakesTemperatureFL', 'brakesTemperatureFR',  'tyresSurfaceTemperatureRL',
     'tyresSurfaceTemperatureRR', 'tyresSurfaceTemperatureFL', 'tyresSurfaceTemperatureFR',
@@ -90,19 +100,22 @@ def trainingCalculations(db):
     ]
 
     df, names, conn = getMainDf(db)
-    timeStep = 10 # currently measured in packets - can easily adjust from here
-    data = groupByLaps(df)
-
-    averagedData = [averages(d, timeStep) for d in data]# perform averaging on each lap individually
-    fullAveragedData = pd.concat(averagedData) # merge averaged laps into a single df
-
-    summedData = [sums(selectSumColumns(i, columnsToSum)) for i in data]#calculate cumulative sum on each lap
-    sumNames = ['summed_'+ name for name in columnsToSum] #modify names for summed variables
-    fullSummedData = pd.concat(summedData)#merge to single df
-    fullSummedData.columns = sumNames #attach correct names
-
-    finalData = pd.concat([fullAveragedData, fullSummedData], axis = 1, ignore_index=False) #merge to create unified training data df
+    # timeStep = 10 # currently measured in packets - can easily adjust from here
+    # data = groupByLaps(df)
+    # sessionUID = df['sessionUID']
+    #
+    # averagedData = [averages(d, timeStep) for d in data]# perform averaging on each lap individually
+    # fullAveragedData = pd.concat(averagedData) # merge averaged laps into a single df
+    #
+    # summedData = [sums(selectSumColumns(i, columnsToSum)) for i in data]#calculate cumulative sum on each lap
+    # sumNames = ['summed_'+ name for name in columnsToSum] #modify names for summed variables
+    # fullSummedData = pd.concat(summedData)#merge to single df
+    # fullSummedData.columns = sumNames #attach correct names
+    #
+    # finalData = pd.concat([fullAveragedData, fullSummedData], axis = 1, ignore_index=False) #merge to create unified training data df
+    finalData=df
     is_pit = getIsPit(db)
     finalData = checkFullLap(finalData, is_pit)
-
+    finalData = get_lap_time_remaining(finalData)
+    # finalData['sessionUID'] = sessionUID
     toSQL(finalData, conn) # send data back to SQL file
