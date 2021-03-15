@@ -104,7 +104,7 @@ def masterLapData(connection):
     lapTimesDf = getLapTimes(connection)
     lapTimesDf = addNames(lapTimesDf)
     lapTimesDf = finalLapTime(lapTimesDf)
-    masterLapDataDfVars = ["frameIdentifier", "lastLapTime", "currentLapTime", "bestLapTime", "currentLapNum", "finalLapTime", "lapDistance", "carPosition"]
+    masterLapDataDfVars = ["frameIdentifier", "lastLapTime", "currentLapTime", "bestLapTime", "currentLapNum", "finalLapTime", "lapDistance", "carPosition", "sector"]
     masterLapDataDf = lapTimesDf[masterLapDataDfVars]
     return masterLapDataDf
 
