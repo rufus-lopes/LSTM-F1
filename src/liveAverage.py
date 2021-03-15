@@ -80,7 +80,7 @@ class liveAverage(threading.Thread):
             self.averager()
             self.summer()
             self.writer()
-            self.predictor()
+            #self.predictor()
         self.input.to_csv('CSV_Data/av.csv')
         # print(self.input.info())
         # print(self.input)

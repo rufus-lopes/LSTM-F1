@@ -123,7 +123,7 @@ class liveMerged(threading.Thread):
 
         self.masterSession = ["frameIdentifier", "weather", "trackTemperature", "trackLength", "trackId"]
 
-        self.masterLap = ["frameIdentifier", "lastLapTime", "currentLapTime", "currentLapNum", "lapDistance", "carPosition"]
+        self.masterLap = ["frameIdentifier", "lastLapTime", "currentLapTime", "currentLapNum", "lapDistance", "carPosition", "sector"]
 
         self.masterSetup = ["frameIdentifier", "SessionTime", "frontWing", "rearWing", "onThrottle", "offThrottle", "frontCamber",
         "rearCamber", "frontToe", "rearToe", "frontSuspension", "rearSuspension", "frontAntiRollBar",
@@ -199,6 +199,7 @@ class liveMerged(threading.Thread):
             isLapChanged = (self.final["currentLapNum"].shift(1, fill_value=self.final["currentLapNum"].head(1)) != self.final["currentLapNum"]).to_numpy()
             if True in isLapChanged:
                 self.final = pd.DataFrame(columns = self.finalColumns)
+
     def run(self):
         while not self.quitflag:
             self.getData()
@@ -209,8 +210,6 @@ class liveMerged(threading.Thread):
                 self.q.put(self.final)
 
         self.q.put(self.DONE)
-        # print('Final Info:')
-        # print(self.final)
-        # print(self.final.info(verbose=True))
+        
     def requestQuit(self):
         self.quitflag = True
