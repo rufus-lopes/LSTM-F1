@@ -1,3 +1,4 @@
 CSV_Data/
 SQL_Data/
 models/Bayes
+*.csv

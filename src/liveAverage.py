@@ -66,22 +66,26 @@ class liveAverage(threading.Thread):
     def writer(self):
         if not self.roll.empty:
             self.input = pd.concat([self.roll, self.sum], axis=1)
-
     def predictor(self):
-        if not self.input.empty:
-            pred = self.model.predict(self.input) # only use the last few datapoints
-            self.input['Prediction'] = pred
-            self.input.reset_index(inplace=True)
-            self.input.to_json('SQL_Data/live_data/live_json.json')
-            # self.input.to_pickle('SQL_Data/live_data/pickle.pkl')
+        if not self.merged.empty:
+            if 'Prediction' in self.merged.columns:
+                self.merged.drop('Prediction', axis=1, inplace=True)
+            if 'frameIdentifier' in self.merged.columns:
+                self.merged.drop(['frameIdentifier',], axis=1, inplace=True)
+            if 'index' in self.merged.columns:
+                self.merged.drop(['index',], axis=1, inplace=True)
+            self.merged = self.merged.astype(float)
+            pred = self.model.predict(self.merged) # only use the last few datapoints
+            self.merged['Prediction'] = pred
+            self.merged.reset_index(inplace=True)
+            self.merged.to_json('SQL_Data/live_data/live_json.json')
     def run(self):
         while not self.quitflag:
             self.reader()
-            self.averager()
-            self.summer()
-            self.writer()
-            #self.predictor()
-        self.input.to_csv('CSV_Data/av.csv')
+            # self.averager()
+            # self.summer()
+            # self.writer()
+            self.predictor()
         # print(self.input.info())
         # print(self.input)
     def requestQuit(self):
