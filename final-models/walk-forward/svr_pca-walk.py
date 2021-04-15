@@ -1,0 +1,145 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error as mse
+from sklearn.metrics import mean_absolute_error as mae
+import pickle
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from matplotlib import pyplot as plt
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+from statsmodels.tools.tools import add_constant
+import statsmodels as sm
+import os
+import sqlite3
+import gc
+import xgboost
+from sklearn.svm import SVR
+from sklearn.decomposition import PCA
+from sklearn.pipeline import Pipeline
+
+def series_to_supervised(data,n_in=1, n_out=1, dropnan=True):
+    n_vars = len(data.columns)
+    df = data
+    cols= [data]
+    names = data.columns
+    for i in range(n_in, 0, -1):
+        neg_shift = df.shift(i)
+        minus_names = [f'{name}_t-{i}' for name in names]
+        neg_shift.columns = minus_names
+        cols.append(neg_shift)
+
+    if n_out > 1:
+        for i in range(0, n_out):
+            pos_shift = df.shift(-i)
+            plus_names = [f'{name}_t+{i}' for name in names]
+            pos_shift.columns = plus_names
+            cols.append(pos_shift)
+
+    agg = pd.concat(cols, axis=1)
+    if dropnan:
+        agg.dropna(inplace=True)
+    return agg
+
+
+def training_data():
+
+    dir = '../../../SQL_Data/constant_setup'
+    files = os.listdir(dir)
+    files = [f for f in files if f.endswith('.sqlite3')]
+
+    data = []
+    for f in files:
+        path = os.path.join(dir, f)
+        conn = sqlite3.connect(path)
+        if os.path.getsize(path) > 10000:
+            cur = conn.cursor()
+            cur.execute('SELECT * FROM walk_forward')
+            df = pd.DataFrame(cur.fetchall())
+            data.append(df)
+
+    names = list(map(lambda x: x[0], cur.description))
+    df = pd.concat(data)
+    df.columns = names
+    df = df.drop(['frameIdentifier','bestLapTime', 'pkt_id', 'packetId', 'SessionTime', 'lap_time_remaining'], axis=1)
+    df.set_index('index', inplace=True)
+
+    return df
+
+def svr_model(trainX, trainY):
+    model = SVR(cache_size=1000)
+    model.fit(trainX, trainY)
+    print('SVR Fit')
+    return model
+
+def scale_data(trainX, testX):
+    trainX_scaler = MinMaxScaler(feature_range=(-1,1))
+    testX_scaler = MinMaxScaler(feature_range=(-1,1))
+    trainX = pd.DataFrame(trainX_scaler.fit_transform(trainX), columns = list(trainX.columns))
+    testX = pd.DataFrame(testX_scaler.fit_transform(testX), columns = list(testX.columns))
+    return trainX, testX, trainX_scaler, testX_scaler
+
+
+def get_models(trainX, trainY):
+    steps = [('scaler', StandardScaler()),('pca', PCA(n_components=40)), ('m', SVR())]
+    model = Pipeline(steps=steps)
+    model.fit(trainX, trainY)
+    return model
+
+
+def sub_sample(df):
+    arr = []
+    session_groups = df.groupby('sessionUID')
+    for s in list(session_groups.groups):
+        session = session_groups.get_group(s)
+        lap_groups = session.groupby('currentLapNum')
+        for l in list(lap_groups.groups):
+            lap = lap_groups.get_group(l)
+            df2 = lap[lap.index % 5 == 0]  # Selects every 10th row starting from 0
+            arr.append(df2)
+
+    sub_sampled_data = pd.concat(arr)
+    print(f'Full sub sample shape {sub_sampled_data.shape}')
+    return sub_sampled_data
+
+def predictions(model, testX, testY):
+    testX['predictions'] = model.predict(testX)
+    testX['truth'] = testY
+    testX['residuals'] = testX['predictions'] - testX['truth']
+    plt.scatter(testX['currentLapTime'], testX['residuals'])
+    plt.show()
+    return testX
+
+if __name__ == '__main__':
+
+    data = training_data()
+
+    data = sub_sample(data)
+
+    data.reset_index(inplace=True, drop=True)
+
+    data = series_to_supervised(data)
+
+    label = data.pop('finalLapTime')
+
+    data.drop(['finalLapTime_t-1', 'sessionUID_t-1'], axis=1, inplace=True)
+
+    trainX, testX, trainY, testY = train_test_split(data, label, test_size=0.2, shuffle=True)
+
+    testX.sort_index(inplace=True)
+    testY.sort_index(inplace=True)
+
+    trainX.drop(['sessionUID'], inplace=True, axis=1)
+
+    testX_sessions = testX.pop('sessionUID').to_numpy()
+
+    SVR_model = get_models(trainX, trainY)
+
+    pred = predictions(SVR_model, testX, testY)
+
+    pred['sessionUID'] = testX_sessions
+
+    pred.to_csv('prediction_csv/SVR_pca_predictions.csv')
+
+    file = 'saved_models/svr_pca_model.sav'
+    pickle.dump(SVR_model, open(file, 'wb'))

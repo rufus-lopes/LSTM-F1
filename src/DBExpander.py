@@ -197,6 +197,8 @@ def masterData(conn):
     masterDf = masterDf.merge(masterTelemetryDf, on="frameIdentifier")
     masterDf = masterDf.merge(masterStatusDf, on="frameIdentifier")
     masterSetupDf = masterSetupDf.merge(masterSessionDf, on="frameIdentifier")
+    masterDf.to_csv('test.csv')
+
 
     return masterDf, masterSetupDf
 
@@ -221,5 +223,5 @@ def DBExpand(database):
     Tables(motionDF, sessionDF, lapDataDF, eventDF, carSetupsDF, carTelemetryDF, carStatusDF, conn)
     masterDf, masterSetupDf = masterData(conn)
     masterDfToSQL(masterDf, masterSetupDf, conn)
-    trainingCalculations(database)
+    trainingCalculations(database, masterDf)
     conn.close()
